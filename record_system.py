@@ -1,4 +1,23 @@
-from hash_table import HashTable
+def get_letter_grade(score):
+    if score >= 90:
+        return "A+"
+    elif score >= 80:
+        return "A"
+    elif score >= 70:
+        return "B+"
+    elif score >= 60:
+        return "B"
+    elif score >= 50:
+        return "C"
+    elif score >= 35:
+        return "D"
+    else:
+        return "F"
+
+
+from datetime import datetime
+import csv
+
 class TreeNode:
     def __init__(self, data):
         self.data = data
@@ -6,25 +25,62 @@ class TreeNode:
         self.right = None
         self.height = 1
 
+
+class HashTable:
+    def __init__(self):
+        self.table = {}  # name (lowercase) → { roll_no: student_dict }
+
+    def insert(self, name, roll_number, grades, status):
+        name = name.lower().strip()
+        if name not in self.table:
+            self.table[name] = {}
+        if roll_number in self.table[name]:
+            return False  # Duplicate
+        self.table[name][roll_number] = {
+            "grades": grades,
+            "status": status
+        }
+        return True
+
+    def search(self, name):
+        name = name.lower().strip()
+        if name not in self.table:
+            return None
+        matches = []
+        for roll_no, student in self.table[name].items():
+            matches.append({
+                "roll_no": roll_no,
+                "name": name,
+                "grades": student["grades"],
+                "status": student["status"],
+                "gpa": AVLRecord.calculate_gpa_static(student["grades"], student["status"])
+            })
+        return matches
+
+    def delete(self, name, roll_no):
+        name = name.lower().strip()
+        if name in self.table and roll_no in self.table[name]:
+            del self.table[name][roll_no]
+            if not self.table[name]:
+                del self.table[name]  # Clean up if list becomes empty
+            return True
+        return False
+
+
 class AVLRecord:
     def __init__(self):
         self.root = None
         self.hash_table = HashTable()
 
     def height(self, node):
-        if not node:
-            return 0
-        return node.height
+        return node.height if node else 0
 
     def update_height(self, node):
-        if not node:
-            return
-        node.height = 1 + max(self.height(node.left), self.height(node.right))
+        if node:
+            node.height = 1 + max(self.height(node.left), self.height(node.right))
 
     def balance_factor(self, node):
-        if not node:
-            return 0
-        return self.height(node.left) - self.height(node.right)
+        return self.height(node.left) - self.height(node.right) if node else 0
 
     def right_rotate(self, y):
         x = y.left
@@ -52,12 +108,12 @@ class AVLRecord:
         elif data['roll_no'] > root.data['roll_no']:
             root.right = self.insert(root.right, data)
         else:
-            return root  # Duplicate roll_no not allowed
+            print(f"Duplicate roll_no {data['roll_no']} detected")
+            return root
 
         self.update_height(root)
         balance = self.balance_factor(root)
 
-        # Rotations
         if balance > 1 and data['roll_no'] < root.left.data['roll_no']:
             return self.right_rotate(root)
         if balance < -1 and data['roll_no'] > root.right.data['roll_no']:
@@ -80,19 +136,15 @@ class AVLRecord:
     def delete_node(self, root, roll_no):
         if not root:
             return root
-
         if roll_no < root.data['roll_no']:
             root.left = self.delete_node(root.left, roll_no)
         elif roll_no > root.data['roll_no']:
             root.right = self.delete_node(root.right, roll_no)
         else:
-            # Node with only one child or no child
             if not root.left:
                 return root.right
             elif not root.right:
                 return root.left
-
-            # Node with two children
             temp = self.min_value_node(root.right)
             root.data = temp.data
             root.right = self.delete_node(root.right, temp.data['roll_no'])
@@ -100,7 +152,6 @@ class AVLRecord:
         self.update_height(root)
         balance = self.balance_factor(root)
 
-        # Rotations
         if balance > 1 and self.balance_factor(root.left) >= 0:
             return self.right_rotate(root)
         if balance > 1 and self.balance_factor(root.left) < 0:
@@ -114,7 +165,8 @@ class AVLRecord:
 
         return root
 
-    def calculate_gpa(self, grades, status):
+    @staticmethod
+    def calculate_gpa_static(grades, status):
         if status == "Absent":
             return 0.0
         total = 0
@@ -133,42 +185,42 @@ class AVLRecord:
         return round(total / count, 2) if count > 0 else 0.0
 
     def add_student(self, roll_no, name, grades=None, status="Present"):
-        grades = grades or {
-            "English": {"IA1": 0, "IA2": 0, "Final": 0},
-            "Mathematics": {"IA1": 0, "IA2": 0, "Final": 0},
-            "Physics": {"IA1": 0, "IA2": 0, "Final": 0},
-            "Chemistry": {"IA1": 0, "IA2": 0, "Final": 0},
-            "Second Language": {"IA1": 0, "IA2": 0, "Final": 0}
-        }
+        default_subjects = ["English", "Mathematics", "Physics", "Chemistry", "Second Language"]
+        grades = grades or {}
+        for subject in default_subjects:
+            if subject not in grades:
+                grades[subject] = {"IA1": 0, "IA2": 0, "Final": 0}
+
+        if self.search(roll_no):
+            print(f"Failed to insert roll_no {roll_no} — already exists")
+            return False
+
         data = {
             "roll_no": roll_no,
             "name": name,
             "grades": grades,
             "status": status,
-            "gpa": self.calculate_gpa(grades, status)
+            "gpa": self.calculate_gpa_static(grades, status)
         }
-        # Insert into AVL tree
-        old_root = self.root
+
         self.root = self.insert(self.root, data)
-        if self.root != old_root:  # Insertion successful
-            # Insert into hash table
-            if not self.hash_table.insert(name, roll_no, grades, status):
-                # Revert AVL insertion if hash table fails (duplicate name)
-                self.root = self.delete_node(self.root, roll_no)
-                return False
-            return True
-        return False
+
+        if not self.hash_table.insert(name, roll_no, grades, status):
+            self.root = self.delete_node(self.root, roll_no)
+            print(f"Failed to insert {name} into hash table")
+            return False
+
+        print(f"Successfully added student {name} (roll_no: {roll_no})")
+        return True
 
     def remove_student(self, roll_no):
-        # Find the student to get the name for hash table deletion
         node = self.search(roll_no)
         if not node:
+            print(f"Roll_no {roll_no} not found for deletion")
             return False
         name = node.data["name"]
-        # Delete from AVL tree
         self.root = self.delete_node(self.root, roll_no)
-        # Delete from hash table
-        return self.hash_table.delete(name)
+        return self.hash_table.delete(name, roll_no)
 
     def search(self, roll_no):
         current = self.root
@@ -182,7 +234,12 @@ class AVLRecord:
         return None
 
     def search_by_name(self, name):
-        return self.hash_table.search(name)
+        result = self.hash_table.search(name)
+        if result:
+            print(f"Search by name successful for {name}")
+            return result
+        print(f"Search by name failed for {name}")
+        return None
 
     def inorder(self, root):
         if not root:
@@ -205,47 +262,21 @@ class AVLRecord:
             prev_gpa = record["gpa"]
         return ranked
 
-    def print_inorder(self):
-        result = self.inorder(self.root)
-        for student in result:
-            print(student)
+    def export_ranked_list_to_csv(self, file_path=None):
+        ranked = self.get_ranked_list()
+        if not file_path:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_path = f"ranked_student_records_{timestamp}.csv"
 
-# Demo
-if __name__ == "__main__":
-    record = AVLRecord()
-    # Add students with grades
-    record.add_student(1, "Krishiv", {
-        "English": {"IA1": 80, "IA2": 85, "Final": 90},
-        "Mathematics": {"IA1": 75, "IA2": 80, "Final": 85}
-    })
-    record.add_student(2, "Shreya", {
-        "English": {"IA1": 90, "IA2": 95, "Final": 92},
-        "Mathematics": {"IA1": 88, "IA2": 90, "Final": 87}
-    })
-    record.add_student(3, "Farah", {
-        "English": {"IA1": 70, "IA2": 0, "Final": 0},
-        "Mathematics": {"IA1": 65, "IA2": 0, "Final": 0}
-    }, status="Medical Leave")
-    record.add_student(4, "Zunaira", {
-        "English": {"IA1": 0, "IA2": 0, "Final": 0},
-        "Mathematics": {"IA1": 0, "IA2": 0, "Final": 0}
-    }, status="Absent")
-
-    print("All students (sorted by roll number):")
-    record.print_inorder()
-
-    print("\nSorted by name:")
-    for student in record.sort_by_field("name"):
-        print(student)
-
-    print("\nRanked by GPA:")
-    for student in record.get_ranked_list():
-        print(student)
-
-    print("\nSearch by name 'Shreya':")
-    result = record.search_by_name("Shreya")
-    print(result)
-
-    print("\nAfter deleting roll_no 2:")
-    record.remove_student(2)
-    record.print_inorder()
+        try:
+            with open(file_path, mode='w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(["Rank", "Roll No", "Name", "GPA", "Status"])
+                for s in ranked:
+                    writer.writerow([s["rank"], s["roll_no"], s["name"], s["gpa"], s["status"]])
+            print(f"✅ Ranked list successfully exported to: {file_path}")
+            return True
+        except Exception as e:
+            print(f"❌ Failed to export ranked list: {e}")
+            return False
+    
