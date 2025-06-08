@@ -18,7 +18,7 @@ record = st.session_state.record
 st.set_page_config(page_title="Academic Record System", layout="centered")
 st.title("Student Academic Record System")
 
-tab1, tab2, tab3 = st.tabs(["View Records", "Add Student", "Export"])
+tab1, tab2 = st.tabs(["View Records", "Add Student"])
 
 with tab1:
 
